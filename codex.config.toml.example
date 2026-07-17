@@ -1,0 +1,6 @@
+[mcp_servers.gdevelop]
+command = "node"
+args = ["/absolute/path/to/gdevelop-mcp-server/src/index.js"]
+
+[mcp_servers.gdevelop.env]
+GDEVELOP_ROOT = "/absolute/path/to/GDevelop"

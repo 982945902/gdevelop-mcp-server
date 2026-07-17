@@ -1,0 +1,37 @@
+{
+  "name": "gdevelop-mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local MCP server for building and serving GDevelop previews.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/982945902/gdevelop-mcp-server.git"
+  },
+  "homepage": "https://github.com/982945902/gdevelop-mcp-server#readme",
+  "bugs": {
+    "url": "https://github.com/982945902/gdevelop-mcp-server/issues"
+  },
+  "keywords": [
+    "gdevelop",
+    "mcp",
+    "codex",
+    "game-development"
+  ],
+  "bin": {
+    "gdevelop-mcp": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test",
+    "test:runtime": "node --test test/real-runtime.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  }
+}
