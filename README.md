@@ -1,17 +1,24 @@
 # GDevelop MCP Server
 
-This package gives Codex a local control plane for the existing GDevelop
-exporter. It does not reimplement the game runtime: `libGD.js` loads a project,
-`gd.Exporter` generates a GDJS preview, and a loopback-only HTTP server exposes
-the generated files to a browser. See [ARCHITECTURE.md](./ARCHITECTURE.md) for
-the C++/Wasm, MCP, AI, and browser Runtime boundaries.
+This package gives Codex a local authoring and preview control plane for
+GDevelop. It does not reimplement the game runtime: `libGD.js` creates and
+mutates project data, `gd.Exporter` generates a GDJS preview, and a
+loopback-only HTTP server exposes the generated files to a browser. See
+[ARCHITECTURE.md](./ARCHITECTURE.md) for the C++/Wasm, MCP, AI, and browser
+Runtime boundaries.
 
 This is an independent, unofficial integration. GDevelop and its logo are the
 property of their respective owner.
 
 ## Tools
 
+- `create_project` creates an editable 2D or 3D project and opens a session.
 - `open_project` loads a project JSON file and returns a session ID and scenes.
+- `update_project` changes metadata, resolution, and frame-rate settings.
+- `import_resource` registers a local image, 3D model, audio, video, font,
+  JSON, or JavaScript file.
+- `set_scene_javascript` adds or replaces an MCP-managed scene JavaScript event.
+- `save_project` serializes the in-memory project back to disk.
 - `build_preview` exports one scene, serves it, and returns an HTTP URL.
 - `get_preview_status` lists or inspects preview sessions.
 - `stop_preview` stops the server and removes that preview's temporary files.
@@ -69,13 +76,19 @@ GDEVELOP_ROOT = "/absolute/path/to/GDevelop"
 
 The same block is available in `codex.config.toml.example`.
 
-Restart Codex after changing MCP configuration. The intended loop is:
+Restart Codex after changing MCP configuration. For an existing project, the
+intended loop is:
 
 1. Call `open_project` with the game JSON path.
 2. Call `build_preview` with the returned `projectId` and an optional scene.
 3. Open the returned URL with Codex's browser capability to inspect, screenshot,
    and debug the generated runtime.
 4. Call `stop_preview`, then `close_project`, when finished.
+
+For a new project, Codex can instead call `create_project`, apply one or more
+`update_project`, `import_resource`, and `set_scene_javascript` operations,
+then call `save_project` and `build_preview`. Project mutations remain in memory
+until explicitly saved, so previewing can be used as a fast feedback loop.
 
 The server binds only to `127.0.0.1` and uses a random port. Export jobs are
 serialized because the shared C++/Wasm platform and extension registries are
@@ -99,4 +112,13 @@ GDEVELOP_LIBGD_PATH=/absolute/path/to/libGD.js \
 GDEVELOP_GDJS_ROOT=/absolute/path/to/built/GDJS \
 GDEVELOP_TEST_PROJECT=/absolute/path/to/game.json \
 npm run test:runtime
+```
+
+The real authoring path (create → import → script → save → export) is covered by:
+
+```sh
+GDEVELOP_LIBGD_PATH=/absolute/path/to/libGD.js \
+GDEVELOP_GDJS_ROOT=/absolute/path/to/built/GDJS \
+GDEVELOP_TEST_RESOURCE=/absolute/path/to/model.glb \
+node --test test/real-authoring.test.js
 ```

@@ -19,6 +19,48 @@ export class ProjectSessionManager {
     return this.describe(record);
   }
 
+  async create(projectFile, options) {
+    const { project, summary } = await this.runtime.createProject(
+      projectFile,
+      options,
+    );
+    const projectId = randomUUID();
+    const record = {
+      projectId,
+      project,
+      ...summary,
+      openedAt: new Date().toISOString(),
+    };
+    this.projects.set(projectId, record);
+    return this.describe(record);
+  }
+
+  async save(projectId) {
+    const record = this.get(projectId);
+    const summary = await this.runtime.saveProject(record.project);
+    Object.assign(record, summary);
+    return this.describe(record);
+  }
+
+  async importResource(projectId, input) {
+    const record = this.get(projectId);
+    const resource = await this.runtime.importResource(record.project, input);
+    return { projectId, resource };
+  }
+
+  update(projectId, changes) {
+    const record = this.get(projectId);
+    const summary = this.runtime.updateProject(record.project, changes);
+    Object.assign(record, summary);
+    return this.describe(record);
+  }
+
+  async setSceneJavascript(projectId, input) {
+    const record = this.get(projectId);
+    const event = await this.runtime.setSceneJavascript(record.project, input);
+    return { projectId, ...event };
+  }
+
   get(projectId) {
     const record = this.projects.get(projectId);
     if (!record) throw new Error(`Unknown project session: ${projectId}`);

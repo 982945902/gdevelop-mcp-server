@@ -21,8 +21,39 @@ const runTool = (handler) => async (input) => {
 export const createMcpServer = ({ projects, previews }) => {
   const server = new McpServer({
     name: "gdevelop-local-runtime",
-    version: "0.1.0",
+    version: "0.2.0",
   });
+
+  server.registerTool(
+    "create_project",
+    {
+      title: "Create a GDevelop project",
+      description:
+        "Create a new editable GDevelop project JSON file and keep it open as a session.",
+      inputSchema: {
+        projectFile: z.string().min(1),
+        name: z.string().min(1),
+        sceneName: z.string().min(1).default("Game"),
+        renderingType: z.enum(["2d", "3d"]).default("2d"),
+        width: z.number().int().min(320).max(7680).default(1280),
+        height: z.number().int().min(200).max(4320).default(720),
+        description: z.string().optional(),
+        overwrite: z.boolean().default(false),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+    },
+    runTool(async ({ projectFile, ...options }) => {
+      const project = await projects.create(projectFile, options);
+      return toolResult(
+        project,
+        `Created ${project.name} as ${project.projectId} at ${project.projectFile}.`,
+      );
+    }),
+  );
 
   server.registerTool(
     "open_project",
@@ -46,6 +77,103 @@ export const createMcpServer = ({ projects, previews }) => {
         project,
         `Opened ${project.name || project.projectFile} as ${project.projectId}.`,
       );
+    }),
+  );
+
+  server.registerTool(
+    "import_resource",
+    {
+      title: "Import a GDevelop resource",
+      description:
+        "Register an existing local image, model, audio, video, font, JSON, or JavaScript file in an open project.",
+      inputSchema: {
+        projectId: z.string().uuid(),
+        sourceFile: z.string().min(1),
+        resourceName: z.string().min(1),
+        kind: z
+          .enum(["auto", "image", "model3D", "audio", "video", "font", "json", "javascript"])
+          .default("auto"),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+    },
+    runTool(async ({ projectId, ...input }) => {
+      const result = await projects.importResource(projectId, input);
+      return toolResult(result, `Imported ${result.resource.name}.`);
+    }),
+  );
+
+  server.registerTool(
+    "update_project",
+    {
+      title: "Update GDevelop project settings",
+      description:
+        "Update editable project metadata, resolution, and frame-rate settings in memory.",
+      inputSchema: {
+        projectId: z.string().uuid(),
+        name: z.string().min(1).optional(),
+        description: z.string().optional(),
+        author: z.string().optional(),
+        packageName: z.string().min(1).optional(),
+        width: z.number().int().min(320).max(7680).optional(),
+        height: z.number().int().min(200).max(4320).optional(),
+        maximumFps: z.number().int().min(1).max(240).optional(),
+        minimumFps: z.number().int().min(1).max(240).optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+    },
+    runTool(({ projectId, ...changes }) => {
+      const project = projects.update(projectId, changes);
+      return toolResult(project, `Updated ${project.name}.`);
+    }),
+  );
+
+  server.registerTool(
+    "set_scene_javascript",
+    {
+      title: "Set scene JavaScript",
+      description:
+        "Add or replace an MCP-managed inline JavaScript event on a GDevelop scene.",
+      inputSchema: {
+        projectId: z.string().uuid(),
+        sceneName: z.string().min(1),
+        code: z.string(),
+        mode: z.enum(["replace", "append"]).default("replace"),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+    },
+    runTool(async ({ projectId, ...input }) => {
+      const result = await projects.setSceneJavascript(projectId, input);
+      return toolResult(result, `Updated JavaScript for scene ${result.sceneName}.`);
+    }),
+  );
+
+  server.registerTool(
+    "save_project",
+    {
+      title: "Save a GDevelop project",
+      description: "Serialize an open in-memory project back to its JSON file.",
+      inputSchema: { projectId: z.string().uuid() },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+    },
+    runTool(async ({ projectId }) => {
+      const project = await projects.save(projectId);
+      return toolResult(project, `Saved ${project.name} to ${project.projectFile}.`);
     }),
   );
 

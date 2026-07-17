@@ -10,6 +10,18 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createGDevelopMcpApp } from "../src/app.js";
 
 class FakeRuntime {
+  async createProject(projectFile, options) {
+    return {
+      project: { projectFile, name: options.name, resources: [], scripts: [] },
+      summary: {
+        projectFile,
+        name: options.name,
+        scenes: [options.sceneName || "Game"],
+        resolution: { width: options.width || 1280, height: options.height || 720 },
+      },
+    };
+  }
+
   async openProject(projectFile) {
     return {
       project: { projectFile },
@@ -28,6 +40,42 @@ class FakeRuntime {
       `<h1>${project.projectFile}:${sceneName || "Scene"}</h1>`,
     );
     return { sceneName: sceneName || "Scene" };
+  }
+
+  async importResource(project, input) {
+    const resource = {
+      name: input.resourceName,
+      kind: input.kind === "auto" ? "image" : input.kind,
+      file: input.sourceFile,
+    };
+    project.resources.push(resource);
+    return resource;
+  }
+
+  updateProject(project, changes) {
+    if (changes.name) project.name = changes.name;
+    return {
+      projectFile: project.projectFile,
+      name: project.name,
+      scenes: ["Scene"],
+      resolution: { width: changes.width || 800, height: changes.height || 600 },
+    };
+  }
+
+  async setSceneJavascript(project, input) {
+    project.scripts ||= [];
+    project.scripts.push(input);
+    return { sceneName: input.sceneName, mode: input.mode, eventCount: project.scripts.length };
+  }
+
+  async saveProject(project) {
+    project.saved = true;
+    return {
+      projectFile: project.projectFile,
+      name: project.name || "MCP test game",
+      scenes: ["Scene"],
+      resolution: { width: 800, height: 600 },
+    };
   }
 
   closeProject(project) {
@@ -58,9 +106,14 @@ test("MCP tools complete the preview lifecycle and expose a fetchable URL", asyn
   assert.deepEqual(listedTools.tools.map((tool) => tool.name).sort(), [
     "build_preview",
     "close_project",
+    "create_project",
     "get_preview_status",
+    "import_resource",
     "open_project",
+    "save_project",
+    "set_scene_javascript",
     "stop_preview",
+    "update_project",
   ]);
 
   const opened = await client.callTool({
@@ -126,4 +179,58 @@ test("invalid session IDs are returned as MCP tool errors", async (t) => {
   });
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /Unknown project session/);
+});
+
+test("MCP can create, mutate, resource-link, script, and save a project", async (t) => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "gdevelop-mcp-authoring-"));
+  const app = createGDevelopMcpApp({ runtime: new FakeRuntime(), tempRoot });
+  const client = new Client({ name: "gdevelop-mcp-authoring-test", version: "1.0.0" });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await Promise.all([app.server.connect(serverTransport), client.connect(clientTransport)]);
+  t.after(async () => {
+    await client.close();
+    await app.close();
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  });
+
+  const created = await client.callTool({
+    name: "create_project",
+    arguments: {
+      projectFile: path.join(tempRoot, "game.json"),
+      name: "Authoring game",
+      sceneName: "Game",
+      renderingType: "3d",
+    },
+  });
+  const { projectId } = created.structuredContent;
+  assert.equal(created.structuredContent.name, "Authoring game");
+
+  const updated = await client.callTool({
+    name: "update_project",
+    arguments: { projectId, name: "Updated game", width: 1920, height: 1080 },
+  });
+  assert.equal(updated.structuredContent.name, "Updated game");
+
+  const imported = await client.callTool({
+    name: "import_resource",
+    arguments: {
+      projectId,
+      sourceFile: path.join(tempRoot, "cat.png"),
+      resourceName: "cat.png",
+      kind: "image",
+    },
+  });
+  assert.equal(imported.structuredContent.resource.name, "cat.png");
+
+  const scripted = await client.callTool({
+    name: "set_scene_javascript",
+    arguments: { projectId, sceneName: "Game", code: "console.log('hello')" },
+  });
+  assert.equal(scripted.structuredContent.eventCount, 1);
+
+  const saved = await client.callTool({
+    name: "save_project",
+    arguments: { projectId },
+  });
+  assert.equal(saved.isError, undefined);
 });

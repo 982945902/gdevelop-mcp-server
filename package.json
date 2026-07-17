@@ -1,9 +1,9 @@
 {
   "name": "gdevelop-mcp-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Local MCP server for building and serving GDevelop previews.",
+  "description": "Local MCP server for authoring, building, and serving GDevelop projects.",
   "license": "MIT",
   "repository": {
     "type": "git",
