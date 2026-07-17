@@ -104,14 +104,21 @@ test("MCP tools complete the preview lifecycle and expose a fetchable URL", asyn
 
   const listedTools = await client.listTools();
   assert.deepEqual(listedTools.tools.map((tool) => tool.name).sort(), [
+    "add_object_instance",
+    "add_scene_layer",
+    "add_scene_object",
     "build_preview",
     "close_project",
     "create_project",
+    "describe_native_project",
+    "export_project",
     "get_preview_status",
     "import_resource",
     "open_project",
     "save_project",
+    "set_scene_events",
     "set_scene_javascript",
+    "set_scene_variable",
     "stop_preview",
     "update_project",
   ]);

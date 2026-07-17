@@ -54,6 +54,70 @@ const makeResource = (gd, kind) => {
   return new ResourceConstructor();
 };
 
+const setVariableValue = (variable, value) => {
+  if (typeof value === "boolean") variable.setBool(value);
+  else if (typeof value === "number") variable.setValue(value);
+  else variable.setString(String(value));
+};
+
+const appendInstruction = (gd, instructions, definition) => {
+  const instruction = new gd.Instruction();
+  instruction.setType(definition.type);
+  const parameters = definition.parameters || [];
+  instruction.setParametersCount(parameters.length);
+  parameters.forEach((parameter, index) => {
+    instruction.setParameter(index, String(parameter));
+  });
+  instruction.setInverted(Boolean(definition.inverted));
+  // InstructionsList::push_back keeps object-declaration instructions at the
+  // end, which breaks the common "Create then configure" event pattern. Insert
+  // explicitly at the current size to preserve the authored order exactly.
+  instructions.insert(instruction, instructions.size());
+};
+
+const appendNativeEvents = (gd, project, eventsList, definitions) => {
+  for (const definition of definitions) {
+    if (definition.kind === "comment") {
+      const baseEvent = eventsList.insertNewEvent(
+        project,
+        "BuiltinCommonInstructions::Comment",
+        eventsList.getEventsCount(),
+      );
+      const commentEvent = gd.asCommentEvent(baseEvent);
+      commentEvent.setComment(definition.text);
+      if (definition.color) {
+        commentEvent.setBackgroundColor(
+          definition.color.r,
+          definition.color.g,
+          definition.color.b,
+        );
+      }
+      continue;
+    }
+
+    const baseEvent = eventsList.insertNewEvent(
+      project,
+      "BuiltinCommonInstructions::Standard",
+      eventsList.getEventsCount(),
+    );
+    const standardEvent = gd.asStandardEvent(baseEvent);
+    for (const condition of definition.conditions || []) {
+      appendInstruction(gd, standardEvent.getConditions(), condition);
+    }
+    for (const action of definition.actions || []) {
+      appendInstruction(gd, standardEvent.getActions(), action);
+    }
+    if (definition.subEvents?.length) {
+      appendNativeEvents(
+        gd,
+        project,
+        standardEvent.getSubEvents(),
+        definition.subEvents,
+      );
+    }
+  }
+};
+
 /**
  * Thin adapter over libGD.js. Keeping this class free of MCP concerns makes the
  * exporter usable by tests, CLIs and future HTTP transports.
@@ -309,6 +373,205 @@ export class GDevelopRuntime {
     if (changes.maximumFps !== undefined) project.setMaximumFPS(changes.maximumFps);
     if (changes.minimumFps !== undefined) project.setMinimumFPS(changes.minimumFps);
     return summarizeProject(project, project.getProjectFile());
+  }
+
+  async addSceneLayer(project, { sceneName, layerName }) {
+    if (!project.hasLayoutNamed(sceneName)) throw new Error(`Unknown scene: ${sceneName}`);
+    const layout = project.getLayout(sceneName);
+    if (layout.hasLayerNamed(layerName)) throw new Error(`Layer already exists: ${layerName}`);
+    layout.insertNewLayer(layerName, layout.getLayersCount());
+    return { sceneName, layerName, layerCount: layout.getLayersCount() };
+  }
+
+  async setSceneVariable(project, { sceneName, name, value }) {
+    if (!project.hasLayoutNamed(sceneName)) throw new Error(`Unknown scene: ${sceneName}`);
+    const variables = project.getLayout(sceneName).getVariables();
+    const variable = variables.has(name)
+      ? variables.get(name)
+      : variables.insertNew(name, variables.count());
+    setVariableValue(variable, value);
+    return { sceneName, name, value };
+  }
+
+  async addSceneObject(project, input) {
+    const gd = await this.initialize();
+    const {
+      sceneName,
+      name,
+      type,
+      resourceName,
+      collisionMask,
+      animationName = "Idle",
+      frameDuration = 0.12,
+      loop = true,
+      text = "",
+      characterSize = 32,
+      color = "255;255;255",
+      behaviors = [],
+      variables = {},
+    } = input;
+    if (!project.hasLayoutNamed(sceneName)) throw new Error(`Unknown scene: ${sceneName}`);
+    const layout = project.getLayout(sceneName);
+    const objects = layout.getObjects();
+    if (objects.hasObjectNamed(name)) throw new Error(`Object already exists: ${name}`);
+    const object = objects.insertNewObject(project, type, name, objects.getObjectsCount());
+
+    if (type === "Sprite") {
+      if (!resourceName) throw new Error(`Sprite ${name} requires resourceName.`);
+      if (!project.getResourcesManager().hasResource(resourceName)) {
+        throw new Error(`Unknown resource: ${resourceName}`);
+      }
+      const configuration = gd.asSpriteConfiguration(object.getConfiguration());
+      const animation = new gd.Animation();
+      const sprite = new gd.Sprite();
+      // AnimationList and Direction take ownership of these values. Deleting the
+      // wrappers here corrupts the Wasm-owned project and only fails later when a
+      // second Sprite is serialized.
+      animation.setName(animationName);
+      animation.setDirectionsCount(1);
+      const direction = animation.getDirection(0);
+      direction.setLoop(loop);
+      direction.setTimeBetweenFrames(frameDuration);
+      sprite.setImageName(resourceName);
+      if (collisionMask) {
+        const polygon = gd.Polygon2d.createRectangle(
+          collisionMask.width,
+          collisionMask.height,
+        );
+        // Polygon2d::CreateRectangle is centered on (0, 0), while sprite
+        // collision masks use top-left image coordinates. Move the rectangle
+        // into the image bounds so runtime hitboxes align with the artwork.
+        polygon.move(collisionMask.width / 2, collisionMask.height / 2);
+        const polygons = new gd.VectorPolygon2d();
+        polygons.push_back(polygon);
+        sprite.setCustomCollisionMask(polygons);
+      }
+      direction.addSprite(sprite);
+      configuration.getAnimations().addAnimation(animation);
+    } else if (type === "TextObject::Text") {
+      const configuration = gd.asTextObjectConfiguration(object.getConfiguration());
+      configuration.setText(text);
+      configuration.setCharacterSize(characterSize);
+      configuration.setColor(color);
+    }
+
+    for (const [variableName, value] of Object.entries(variables)) {
+      const objectVariables = object.getVariables();
+      const variable = objectVariables.has(variableName)
+        ? objectVariables.get(variableName)
+        : objectVariables.insertNew(variableName, objectVariables.count());
+      setVariableValue(variable, value);
+    }
+
+    for (const behaviorDefinition of behaviors) {
+      const behavior = object.addNewBehavior(
+        project,
+        behaviorDefinition.type,
+        behaviorDefinition.name,
+      );
+      const availableProperties = behavior.getProperties();
+      const propertyKeys = availableProperties.keys();
+      const normalizedPropertyKeys = new Map();
+      for (let index = 0; index < propertyKeys.size(); index += 1) {
+        const propertyKey = propertyKeys.at(index);
+        normalizedPropertyKeys.set(propertyKey.toLowerCase(), propertyKey);
+      }
+      for (const [propertyName, propertyValue] of Object.entries(
+        behaviorDefinition.properties || {},
+      )) {
+        const resolvedPropertyName =
+          normalizedPropertyKeys.get(propertyName.toLowerCase()) || propertyName;
+        const serializedPropertyValue =
+          typeof propertyValue === "boolean"
+            ? propertyValue
+              ? "1"
+              : "0"
+            : String(propertyValue);
+        if (!behavior.updateProperty(resolvedPropertyName, serializedPropertyValue)) {
+          throw new Error(
+            `Unable to set ${behaviorDefinition.name}.${propertyName} on ${name}.`,
+          );
+        }
+      }
+    }
+    layout.updateBehaviorsSharedData(project);
+    return {
+      sceneName,
+      name,
+      type,
+      behaviors: behaviors.map(({ name: behaviorName, type: behaviorType }) => ({
+        name: behaviorName,
+        type: behaviorType,
+      })),
+    };
+  }
+
+  async addObjectInstance(project, input) {
+    const {
+      sceneName,
+      objectName,
+      x,
+      y,
+      layer = "",
+      zOrder = 0,
+      width,
+      height,
+    } = input;
+    if (!project.hasLayoutNamed(sceneName)) throw new Error(`Unknown scene: ${sceneName}`);
+    const layout = project.getLayout(sceneName);
+    if (!layout.getObjects().hasObjectNamed(objectName)) {
+      throw new Error(`Unknown object: ${objectName}`);
+    }
+    if (layer && !layout.hasLayerNamed(layer)) throw new Error(`Unknown layer: ${layer}`);
+    const instance = layout.getInitialInstances().insertNewInitialInstance();
+    instance.setObjectName(objectName);
+    instance.setX(x);
+    instance.setY(y);
+    instance.setLayer(layer);
+    instance.setZOrder(zOrder);
+    if (width !== undefined || height !== undefined) {
+      instance.setHasCustomSize(true);
+      instance.setShouldKeepRatio(width === undefined || height === undefined);
+      if (width !== undefined) instance.setCustomWidth(width);
+      if (height !== undefined) instance.setCustomHeight(height);
+    }
+    return { sceneName, objectName, x, y, layer, zOrder, width, height };
+  }
+
+  async setSceneEvents(project, { sceneName, events: definitions, mode = "replace" }) {
+    const gd = await this.initialize();
+    if (!project.hasLayoutNamed(sceneName)) throw new Error(`Unknown scene: ${sceneName}`);
+    const events = project.getLayout(sceneName).getEvents();
+    if (mode === "replace") events.clear();
+    appendNativeEvents(gd, project, events, definitions);
+    return { sceneName, mode, eventCount: events.getEventsCount() };
+  }
+
+  describeNativeProject(project) {
+    const scenes = [];
+    for (let layoutIndex = 0; layoutIndex < project.getLayoutsCount(); layoutIndex += 1) {
+      const layout = project.getLayoutAt(layoutIndex);
+      const objects = [];
+      for (let objectIndex = 0; objectIndex < layout.getObjects().getObjectsCount(); objectIndex += 1) {
+        const object = layout.getObjects().getObjectAt(objectIndex);
+        const behaviorNames = object.getAllBehaviorNames();
+        const behaviors = [];
+        for (let behaviorIndex = 0; behaviorIndex < behaviorNames.size(); behaviorIndex += 1) {
+          const behaviorName = behaviorNames.at(behaviorIndex);
+          const behavior = object.getBehavior(behaviorName);
+          behaviors.push({ name: behaviorName, type: behavior.getTypeName() });
+        }
+        objects.push({ name: object.getName(), type: object.getType(), behaviors });
+      }
+      scenes.push({
+        name: layout.getName(),
+        objects,
+        instances: layout.getInitialInstances().getInstancesCount(),
+        events: layout.getEvents().getEventsCount(),
+        variables: layout.getVariables().count(),
+      });
+    }
+    return { ...summarizeProject(project, project.getProjectFile()), scenes };
   }
 
   async setSceneJavascript(project, { sceneName, code, mode = "replace" }) {

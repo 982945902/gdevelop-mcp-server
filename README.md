@@ -17,6 +17,13 @@ property of their respective owner.
 - `update_project` changes metadata, resolution, and frame-rate settings.
 - `import_resource` registers a local image, 3D model, audio, video, font,
   JSON, or JavaScript file.
+- `add_scene_layer` creates an editor-visible scene layer.
+- `set_scene_variable` creates or updates an editor-visible scene variable.
+- `add_scene_object` creates a native Sprite/Text object with variables and behaviors.
+- `add_object_instance` places an editor-visible initial scene instance.
+- `set_scene_events` authors standard conditions/actions and nested events without JavaScript.
+- `describe_native_project` reports the native objects, behaviors, instances, variables, and events.
+- `export_project` writes a persistent GDJS web build to a chosen directory.
 - `set_scene_javascript` adds or replaces an MCP-managed scene JavaScript event.
 - `save_project` serializes the in-memory project back to disk.
 - `build_preview` exports one scene, serves it, and returns an HTTP URL.
@@ -86,9 +93,13 @@ intended loop is:
 4. Call `stop_preview`, then `close_project`, when finished.
 
 For a new project, Codex can instead call `create_project`, apply one or more
-`update_project`, `import_resource`, and `set_scene_javascript` operations,
-then call `save_project` and `build_preview`. Project mutations remain in memory
-until explicitly saved, so previewing can be used as a fast feedback loop.
+`update_project`, `import_resource`, `add_scene_object`, `add_object_instance`,
+`set_scene_variable`, and `set_scene_events` operations, then call `save_project`
+and `build_preview`. This native path produces editor-visible objects, behaviors,
+variables, conditions, and actions. `set_scene_javascript` remains available for
+small engine integrations, but is not required for ordinary gameplay. Project
+mutations remain in memory until explicitly saved, so previewing can be used as
+a fast feedback loop.
 
 The server binds only to `127.0.0.1` and uses a random port. Export jobs are
 serialized because the shared C++/Wasm platform and extension registries are
