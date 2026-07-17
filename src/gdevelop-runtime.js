@@ -407,6 +407,7 @@ export class GDevelopRuntime {
       text = "",
       characterSize = 32,
       color = "255;255;255",
+      textStyle = {},
       behaviors = [],
       variables = {},
     } = input;
@@ -453,6 +454,21 @@ export class GDevelopRuntime {
       configuration.setText(text);
       configuration.setCharacterSize(characterSize);
       configuration.setColor(color);
+      configuration.setBold(Boolean(textStyle.bold));
+      if (textStyle.alignment) configuration.setTextAlignment(textStyle.alignment);
+      if (textStyle.outline) {
+        configuration.setOutlineEnabled(Boolean(textStyle.outline.enabled));
+        configuration.setOutlineThickness(textStyle.outline.thickness ?? 2);
+        configuration.setOutlineColor(textStyle.outline.color ?? "18;12;42");
+      }
+      if (textStyle.shadow) {
+        configuration.setShadowEnabled(Boolean(textStyle.shadow.enabled));
+        configuration.setShadowColor(textStyle.shadow.color ?? "0;0;0");
+        configuration.setShadowOpacity(textStyle.shadow.opacity ?? 160);
+        configuration.setShadowAngle(textStyle.shadow.angle ?? 90);
+        configuration.setShadowDistance(textStyle.shadow.distance ?? 4);
+        configuration.setShadowBlurRadius(textStyle.shadow.blurRadius ?? 2);
+      }
     }
 
     for (const [variableName, value] of Object.entries(variables)) {

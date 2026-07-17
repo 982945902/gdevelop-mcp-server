@@ -19,7 +19,8 @@ property of their respective owner.
   JSON, or JavaScript file.
 - `add_scene_layer` creates an editor-visible scene layer.
 - `set_scene_variable` creates or updates an editor-visible scene variable.
-- `add_scene_object` creates a native Sprite/Text object with variables and behaviors.
+- `add_scene_object` creates a native Sprite/Text object with variables,
+  behaviors, collision masks, and styled text outlines/shadows.
 - `add_object_instance` places an editor-visible initial scene instance.
 - `set_scene_events` authors standard conditions/actions and nested events without JavaScript.
 - `describe_native_project` reports the native objects, behaviors, instances, variables, and events.

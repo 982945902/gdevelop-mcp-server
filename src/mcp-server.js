@@ -247,6 +247,29 @@ export const createMcpServer = ({ projects, previews }) => {
         text: z.string().default(""),
         characterSize: z.number().positive().default(32),
         color: z.string().default("255;255;255"),
+        textStyle: z
+          .object({
+            bold: z.boolean().default(false),
+            alignment: z.enum(["left", "center", "right"]).optional(),
+            outline: z
+              .object({
+                enabled: z.boolean().default(true),
+                thickness: z.number().nonnegative().default(2),
+                color: z.string().default("18;12;42"),
+              })
+              .optional(),
+            shadow: z
+              .object({
+                enabled: z.boolean().default(true),
+                color: z.string().default("0;0;0"),
+                opacity: z.number().min(0).max(255).default(160),
+                angle: z.number().default(90),
+                distance: z.number().nonnegative().default(4),
+                blurRadius: z.number().nonnegative().default(2),
+              })
+              .optional(),
+          })
+          .default({}),
         variables: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).default({}),
         behaviors: z
           .array(

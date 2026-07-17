@@ -64,6 +64,12 @@ test(
       type: "TextObject::Text",
       text: "Score 0",
       characterSize: 32,
+      textStyle: {
+        bold: true,
+        alignment: "center",
+        outline: { enabled: true, thickness: 3, color: "12;8;30" },
+        shadow: { enabled: true, opacity: 170, distance: 4, blurRadius: 2 },
+      },
     });
     await runtime.addObjectInstance(project, {
       sceneName: "Game",
@@ -98,6 +104,12 @@ test(
     assert.equal(serialized.layouts[0].objects.find((object) => object.name === "Player").type, "Sprite");
     assert.equal(serialized.layouts[0].instances.length, 2);
     assert.equal(serialized.layouts[0].events.length, 2);
+    const hud = serialized.layouts[0].objects.find((object) => object.name === "Hud");
+    assert.equal(hud.bold, true);
+    assert.equal(hud.textAlignment, "center");
+    assert.equal(hud.content.isOutlineEnabled, true);
+    assert.equal(hud.content.outlineThickness, 3);
+    assert.equal(hud.content.isShadowEnabled, true);
     assert.ok(serialized.layouts[0].events.every((event) => event.type !== "BuiltinCommonInstructions::JsCode"));
 
     ({ project: reopened } = await runtime.openProject(projectFile));
