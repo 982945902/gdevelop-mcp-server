@@ -47,6 +47,8 @@ const makeResource = (gd, kind) => {
     video: gd.VideoResource,
     font: gd.FontResource,
     json: gd.JsonResource,
+    atlas: gd.AtlasResource,
+    spine: gd.SpineResource,
     javascript: gd.JavaScriptResource,
   };
   const ResourceConstructor = constructors[kind];
@@ -330,7 +332,7 @@ export class GDevelopRuntime {
     }
   }
 
-  async importResource(project, { sourceFile, resourceName, kind = "auto" }) {
+  async importResource(project, { sourceFile, resourceName, kind = "auto", metadata }) {
     const absoluteSourceFile = path.resolve(sourceFile);
     await fs.access(absoluteSourceFile);
     const gd = await this.initialize();
@@ -346,6 +348,7 @@ export class GDevelopRuntime {
       resource.setName(resourceName);
       resource.setFile(path.relative(projectDirectory, absoluteSourceFile).split(path.sep).join("/"));
       resource.setUserAdded(true);
+      if (metadata !== undefined) resource.setMetadata(JSON.stringify(metadata));
       if (!resources.addResource(resource)) {
         throw new Error(`Unable to import resource ${resourceName}.`);
       }
@@ -408,6 +411,7 @@ export class GDevelopRuntime {
       characterSize = 32,
       color = "255;255;255",
       textStyle = {},
+      spine = {},
       behaviors = [],
       variables = {},
     } = input;
@@ -468,6 +472,32 @@ export class GDevelopRuntime {
         configuration.setShadowAngle(textStyle.shadow.angle ?? 90);
         configuration.setShadowDistance(textStyle.shadow.distance ?? 4);
         configuration.setShadowBlurRadius(textStyle.shadow.blurRadius ?? 2);
+      }
+    } else if (type === "SpineObject::SpineObject") {
+      if (!resourceName) throw new Error(`Spine object ${name} requires resourceName.`);
+      if (!project.getResourcesManager().hasResource(resourceName)) {
+        throw new Error(`Unknown resource: ${resourceName}`);
+      }
+      const configuration = gd.asSpineConfiguration(object.getConfiguration());
+      if (!configuration.updateProperty("spineResourceName", resourceName)) {
+        throw new Error(`Unable to set Spine resource on ${name}.`);
+      }
+      if (!configuration.updateProperty("scale", String(spine.scale ?? 1))) {
+        throw new Error(`Unable to set Spine scale on ${name}.`);
+      }
+      if (spine.skinName && !configuration.updateProperty("skinName", spine.skinName)) {
+        throw new Error(`Unable to set Spine skin on ${name}.`);
+      }
+      for (const animationDefinition of spine.animations || []) {
+        const animation = new gd.SpineAnimation();
+        try {
+          animation.setName(animationDefinition.name);
+          animation.setSource(animationDefinition.source || animationDefinition.name);
+          animation.setShouldLoop(Boolean(animationDefinition.loop));
+          configuration.addAnimation(animation);
+        } finally {
+          deleteIfPossible(animation);
+        }
       }
     }
 

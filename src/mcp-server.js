@@ -113,14 +113,15 @@ export const createMcpServer = ({ projects, previews }) => {
     {
       title: "Import a GDevelop resource",
       description:
-        "Register an existing local image, model, audio, video, font, JSON, or JavaScript file in an open project.",
+        "Register an existing local image, model, audio, video, font, JSON, Spine atlas/skeleton, or JavaScript file in an open project.",
       inputSchema: {
         projectId: z.string().uuid(),
         sourceFile: z.string().min(1),
         resourceName: z.string().min(1),
         kind: z
-          .enum(["auto", "image", "model3D", "audio", "video", "font", "json", "javascript"])
+          .enum(["auto", "image", "model3D", "audio", "video", "font", "json", "atlas", "spine", "javascript"])
           .default("auto"),
+        metadata: z.record(z.string(), z.unknown()).optional(),
       },
       annotations: {
         readOnlyHint: false,
@@ -228,7 +229,7 @@ export const createMcpServer = ({ projects, previews }) => {
     "add_scene_object",
     {
       title: "Add a native GDevelop object",
-      description: "Create an editable scene object with optional Sprite/Text configuration, object variables, and behaviors.",
+      description: "Create an editable scene object with optional Sprite, Text, or Spine configuration, object variables, and behaviors.",
       inputSchema: {
         projectId: z.string().uuid(),
         sceneName: z.string().min(1),
@@ -268,6 +269,21 @@ export const createMcpServer = ({ projects, previews }) => {
                 blurRadius: z.number().nonnegative().default(2),
               })
               .optional(),
+          })
+          .default({}),
+        spine: z
+          .object({
+            scale: z.number().positive().default(1),
+            skinName: z.string().optional(),
+            animations: z
+              .array(
+                z.object({
+                  name: z.string().min(1),
+                  source: z.string().min(1).optional(),
+                  loop: z.boolean().default(false),
+                }),
+              )
+              .default([]),
           })
           .default({}),
         variables: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).default({}),
