@@ -11,6 +11,7 @@ import { createGDevelopMcpApp } from "../src/app.js";
 
 class FakeRuntime {
   async createProject(projectFile, options) {
+    this.lastCreateOptions = options;
     return {
       project: { projectFile, name: options.name, resources: [], scripts: [] },
       summary: {
@@ -219,7 +220,8 @@ test("invalid session IDs are returned as MCP tool errors", async (t) => {
 
 test("MCP can create, mutate, resource-link, script, and save a project", async (t) => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "gdevelop-mcp-authoring-"));
-  const app = createGDevelopMcpApp({ runtime: new FakeRuntime(), tempRoot });
+  const runtime = new FakeRuntime();
+  const app = createGDevelopMcpApp({ runtime, tempRoot });
   const client = new Client({ name: "gdevelop-mcp-authoring-test", version: "1.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await Promise.all([app.server.connect(serverTransport), client.connect(clientTransport)]);
@@ -236,10 +238,22 @@ test("MCP can create, mutate, resource-link, script, and save a project", async 
       name: "Authoring game",
       sceneName: "Game",
       renderingType: "3d",
+      adaptGameResolutionAtRuntime: false,
+      sizeOnStartupMode: "",
+      loadingBackgroundResourceName: "loading.png",
+      loadingBackgroundColor: 526113,
+      loadingMinDuration: 0.35,
+      showGDevelopSplash: false,
     },
   });
   const { projectId } = created.structuredContent;
   assert.equal(created.structuredContent.name, "Authoring game");
+  assert.equal(runtime.lastCreateOptions.adaptGameResolutionAtRuntime, false);
+  assert.equal(runtime.lastCreateOptions.sizeOnStartupMode, "");
+  assert.equal(runtime.lastCreateOptions.loadingBackgroundResourceName, "loading.png");
+  assert.equal(runtime.lastCreateOptions.loadingBackgroundColor, 526113);
+  assert.equal(runtime.lastCreateOptions.loadingMinDuration, 0.35);
+  assert.equal(runtime.lastCreateOptions.showGDevelopSplash, false);
 
   const updated = await client.callTool({
     name: "update_project",

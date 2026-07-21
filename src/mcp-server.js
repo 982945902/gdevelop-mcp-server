@@ -89,6 +89,12 @@ export const createMcpServer = ({ projects, previews }) => {
         width: z.number().int().min(320).max(7680).default(1280),
         height: z.number().int().min(200).max(4320).default(720),
         description: z.string().optional(),
+        adaptGameResolutionAtRuntime: z.boolean().optional(),
+        sizeOnStartupMode: z.enum(["", "scaleOuter", "adaptWidth", "adaptHeight"]).optional(),
+        loadingBackgroundResourceName: z.string().optional(),
+        loadingBackgroundColor: z.number().int().min(0).max(16777215).optional(),
+        loadingMinDuration: z.number().min(0).max(30).optional(),
+        showGDevelopSplash: z.boolean().optional(),
         overwrite: z.boolean().default(false),
       },
       annotations: {
