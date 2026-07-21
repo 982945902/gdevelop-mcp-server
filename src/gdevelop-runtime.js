@@ -57,9 +57,30 @@ const makeResource = (gd, kind) => {
 };
 
 const setVariableValue = (variable, value) => {
-  if (typeof value === "boolean") variable.setBool(value);
-  else if (typeof value === "number") variable.setValue(value);
-  else variable.setString(String(value));
+  if (Array.isArray(value)) {
+    variable.castTo("array");
+    variable.clearChildren();
+    for (const item of value) setVariableValue(variable.pushNew(), item);
+    return;
+  }
+  if (value !== null && typeof value === "object") {
+    variable.castTo("structure");
+    variable.clearChildren();
+    for (const [childName, childValue] of Object.entries(value)) {
+      setVariableValue(variable.getChild(childName), childValue);
+    }
+    return;
+  }
+  if (typeof value === "boolean") {
+    variable.castTo("boolean");
+    variable.setBool(value);
+  } else if (typeof value === "number") {
+    variable.castTo("number");
+    variable.setValue(value);
+  } else {
+    variable.castTo("string");
+    variable.setString(String(value));
+  }
 };
 
 const appendInstruction = (gd, instructions, definition) => {
@@ -94,6 +115,31 @@ const appendNativeEvents = (gd, project, eventsList, definitions) => {
           definition.color.b,
         );
       }
+      continue;
+    }
+
+    if (definition.kind === "group") {
+      const baseEvent = eventsList.insertNewEvent(
+        project,
+        "BuiltinCommonInstructions::Group",
+        eventsList.getEventsCount(),
+      );
+      const groupEvent = gd.asGroupEvent(baseEvent);
+      groupEvent.setName(definition.name);
+      groupEvent.setFolded(Boolean(definition.folded));
+      if (definition.color) {
+        groupEvent.setBackgroundColor(
+          definition.color.r,
+          definition.color.g,
+          definition.color.b,
+        );
+      }
+      appendNativeEvents(
+        gd,
+        project,
+        groupEvent.getSubEvents(),
+        definition.events || [],
+      );
       continue;
     }
 
@@ -396,6 +442,28 @@ export class GDevelopRuntime {
     return { sceneName, name, value };
   }
 
+  async setGlobalVariable(project, { name, value }) {
+    const variables = project.getVariables();
+    const variable = variables.has(name)
+      ? variables.get(name)
+      : variables.insertNew(name, variables.count());
+    setVariableValue(variable, value);
+    return { name, value };
+  }
+
+  async addObjectGroup(project, { sceneName, name, objectNames }) {
+    if (!project.hasLayoutNamed(sceneName)) throw new Error(`Unknown scene: ${sceneName}`);
+    const objects = project.getLayout(sceneName).getObjects();
+    const groups = objects.getObjectGroups();
+    if (groups.has(name)) throw new Error(`Object group already exists: ${name}`);
+    for (const objectName of objectNames) {
+      if (!objects.hasObjectNamed(objectName)) throw new Error(`Unknown object: ${objectName}`);
+    }
+    const group = groups.insertNew(name, groups.count());
+    for (const objectName of objectNames) group.addObject(objectName);
+    return { sceneName, name, objectNames };
+  }
+
   async addSceneObject(project, input) {
     const gd = await this.initialize();
     const {
@@ -562,6 +630,7 @@ export class GDevelopRuntime {
       zOrder = 0,
       width,
       height,
+      variables = {},
     } = input;
     if (!project.hasLayoutNamed(sceneName)) throw new Error(`Unknown scene: ${sceneName}`);
     const layout = project.getLayout(sceneName);
@@ -581,7 +650,14 @@ export class GDevelopRuntime {
       if (width !== undefined) instance.setCustomWidth(width);
       if (height !== undefined) instance.setCustomHeight(height);
     }
-    return { sceneName, objectName, x, y, layer, zOrder, width, height };
+    for (const [variableName, value] of Object.entries(variables)) {
+      const instanceVariables = instance.getVariables();
+      const variable = instanceVariables.has(variableName)
+        ? instanceVariables.get(variableName)
+        : instanceVariables.insertNew(variableName, instanceVariables.count());
+      setVariableValue(variable, value);
+    }
+    return { sceneName, objectName, x, y, layer, zOrder, width, height, variables };
   }
 
   async setSceneEvents(project, { sceneName, events: definitions, mode = "replace" }) {
@@ -609,15 +685,29 @@ export class GDevelopRuntime {
         }
         objects.push({ name: object.getName(), type: object.getType(), behaviors });
       }
+      const objectGroups = [];
+      const groups = layout.getObjects().getObjectGroups();
+      for (let groupIndex = 0; groupIndex < groups.count(); groupIndex += 1) {
+        const group = groups.getAt(groupIndex);
+        objectGroups.push({
+          name: group.getName(),
+          objects: group.getAllObjectsNames().toJSArray(),
+        });
+      }
       scenes.push({
         name: layout.getName(),
         objects,
+        objectGroups,
         instances: layout.getInitialInstances().getInstancesCount(),
         events: layout.getEvents().getEventsCount(),
         variables: layout.getVariables().count(),
       });
     }
-    return { ...summarizeProject(project, project.getProjectFile()), scenes };
+    return {
+      ...summarizeProject(project, project.getProjectFile()),
+      globalVariables: project.getVariables().count(),
+      scenes,
+    };
   }
 
   async setSceneJavascript(project, { sceneName, code, mode = "replace" }) {

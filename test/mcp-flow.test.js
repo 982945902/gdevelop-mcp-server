@@ -68,6 +68,33 @@ class FakeRuntime {
     return { sceneName: input.sceneName, mode: input.mode, eventCount: project.scripts.length };
   }
 
+  async setGlobalVariable(project, input) {
+    project.globalVariables ||= {};
+    project.globalVariables[input.name] = input.value;
+    return input;
+  }
+
+  async setSceneVariable(project, input) {
+    project.sceneVariables ||= {};
+    project.sceneVariables[input.name] = input.value;
+    return input;
+  }
+
+  async setSceneEvents(project, input) {
+    project.nativeEvents = input.events;
+    return {
+      sceneName: input.sceneName,
+      mode: input.mode,
+      eventCount: input.events.length,
+    };
+  }
+
+  async addObjectGroup(project, input) {
+    project.objectGroups ||= [];
+    project.objectGroups.push(input);
+    return input;
+  }
+
   async saveProject(project) {
     project.saved = true;
     return {
@@ -104,6 +131,7 @@ test("MCP tools complete the preview lifecycle and expose a fetchable URL", asyn
 
   const listedTools = await client.listTools();
   assert.deepEqual(listedTools.tools.map((tool) => tool.name).sort(), [
+    "add_object_group",
     "add_object_instance",
     "add_scene_layer",
     "add_scene_object",
@@ -116,6 +144,7 @@ test("MCP tools complete the preview lifecycle and expose a fetchable URL", asyn
     "import_resource",
     "open_project",
     "save_project",
+    "set_global_variable",
     "set_scene_events",
     "set_scene_javascript",
     "set_scene_variable",
@@ -234,6 +263,50 @@ test("MCP can create, mutate, resource-link, script, and save a project", async 
     arguments: { projectId, sceneName: "Game", code: "console.log('hello')" },
   });
   assert.equal(scripted.structuredContent.eventCount, 1);
+
+  const globalVariable = await client.callTool({
+    name: "set_global_variable",
+    arguments: {
+      projectId,
+      name: "MetaProgress",
+      value: { Echoes: 12, Unlocks: ["Fang", "Rift"] },
+    },
+  });
+  assert.equal(globalVariable.structuredContent.value.Unlocks[1], "Rift");
+
+  const sceneVariable = await client.callTool({
+    name: "set_scene_variable",
+    arguments: {
+      projectId,
+      sceneName: "Game",
+      name: "Run",
+      value: { Risk: 2, Route: [1, 3, 2] },
+    },
+  });
+  assert.equal(sceneVariable.structuredContent.value.Route[0], 1);
+
+  const nativeEvents = await client.callTool({
+    name: "set_scene_events",
+    arguments: {
+      projectId,
+      sceneName: "Game",
+      events: [
+        {
+          kind: "group",
+          name: "Run bootstrap",
+          events: [
+            {
+              kind: "standard",
+              conditions: [],
+              actions: [{ type: "ModVarScene", parameters: ["Run.Risk", "=", "1"] }],
+              subEvents: [],
+            },
+          ],
+        },
+      ],
+    },
+  });
+  assert.equal(nativeEvents.structuredContent.eventCount, 1);
 
   const saved = await client.callTool({
     name: "save_project",
