@@ -24,6 +24,16 @@ const instructionSchema = z.object({
   inverted: z.boolean().default(false),
 });
 
+const variableValueSchema = z.lazy(() =>
+  z.union([
+    z.number(),
+    z.string(),
+    z.boolean(),
+    z.array(variableValueSchema),
+    z.record(z.string(), variableValueSchema),
+  ]),
+);
+
 const nativeEventSchema = z.lazy(() =>
   z.union([
     z.object({
@@ -38,6 +48,19 @@ const nativeEventSchema = z.lazy(() =>
         .optional(),
     }),
     z.object({
+      kind: z.literal("group"),
+      name: z.string().min(1),
+      folded: z.boolean().default(false),
+      color: z
+        .object({
+          r: z.number().int().min(0).max(255),
+          g: z.number().int().min(0).max(255),
+          b: z.number().int().min(0).max(255),
+        })
+        .optional(),
+      events: z.array(nativeEventSchema).default([]),
+    }),
+    z.object({
       kind: z.literal("standard"),
       conditions: z.array(instructionSchema).default([]),
       actions: z.array(instructionSchema).default([]),
@@ -49,7 +72,7 @@ const nativeEventSchema = z.lazy(() =>
 export const createMcpServer = ({ projects, previews }) => {
   const server = new McpServer({
     name: "gdevelop-local-runtime",
-    version: "0.3.0",
+    version: "0.4.0",
   });
 
   server.registerTool(
@@ -210,18 +233,36 @@ export const createMcpServer = ({ projects, previews }) => {
     "set_scene_variable",
     {
       title: "Set a GDevelop scene variable",
-      description: "Create or update an editable scene variable with a number, string, or boolean value.",
+      description: "Create or update an editable scene variable with a primitive, structure, or array value.",
       inputSchema: {
         projectId: z.string().uuid(),
         sceneName: z.string().min(1),
         name: z.string().min(1),
-        value: z.union([z.number(), z.string(), z.boolean()]),
+        value: variableValueSchema,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     runTool(async ({ projectId, ...input }) => {
       const result = await projects.setSceneVariable(projectId, input);
       return toolResult(result, `Set scene variable ${result.name}.`);
+    }),
+  );
+
+  server.registerTool(
+    "set_global_variable",
+    {
+      title: "Set a GDevelop global variable",
+      description: "Create or update an editable project-wide variable with a primitive, structure, or array value.",
+      inputSchema: {
+        projectId: z.string().uuid(),
+        name: z.string().min(1),
+        value: variableValueSchema,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    runTool(async ({ projectId, ...input }) => {
+      const result = await projects.setGlobalVariable(projectId, input);
+      return toolResult(result, `Set global variable ${result.name}.`);
     }),
   );
 
@@ -286,7 +327,7 @@ export const createMcpServer = ({ projects, previews }) => {
               .default([]),
           })
           .default({}),
-        variables: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).default({}),
+        variables: z.record(z.string(), variableValueSchema).default({}),
         behaviors: z
           .array(
             z.object({
@@ -306,10 +347,29 @@ export const createMcpServer = ({ projects, previews }) => {
   );
 
   server.registerTool(
+    "add_object_group",
+    {
+      title: "Add a GDevelop object group",
+      description: "Create an editable scene object group for authoring shared enemy, pickup, or platform events.",
+      inputSchema: {
+        projectId: z.string().uuid(),
+        sceneName: z.string().min(1),
+        name: z.string().min(1),
+        objectNames: z.array(z.string().min(1)).min(1),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    runTool(async ({ projectId, ...input }) => {
+      const result = await projects.addObjectGroup(projectId, input);
+      return toolResult(result, `Added object group ${result.name}.`);
+    }),
+  );
+
+  server.registerTool(
     "add_object_instance",
     {
       title: "Place a GDevelop object instance",
-      description: "Place an editable initial instance of a scene object.",
+      description: "Place an editable initial instance of a scene object with optional instance variables.",
       inputSchema: {
         projectId: z.string().uuid(),
         sceneName: z.string().min(1),
@@ -320,6 +380,7 @@ export const createMcpServer = ({ projects, previews }) => {
         zOrder: z.number().default(0),
         width: z.number().positive().optional(),
         height: z.number().positive().optional(),
+        variables: z.record(z.string(), variableValueSchema).default({}),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
@@ -333,7 +394,7 @@ export const createMcpServer = ({ projects, previews }) => {
     "set_scene_events",
     {
       title: "Set native GDevelop scene events",
-      description: "Replace or append editable standard events made of native GDevelop conditions and actions.",
+      description: "Replace or append editable native GDevelop comments, groups, and standard events.",
       inputSchema: {
         projectId: z.string().uuid(),
         sceneName: z.string().min(1),

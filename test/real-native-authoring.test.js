@@ -10,7 +10,7 @@ const libGDPath = process.env.GDEVELOP_LIBGD_PATH;
 const gdjsRoot = process.env.GDEVELOP_GDJS_ROOT;
 
 test(
-  "authors editable objects, behaviors, instances, variables, and standard events",
+  "authors structured variables, groups, instances, and native event sections",
   { skip: !libGDPath || !gdjsRoot },
   async (t) => {
     const temp = await fs.mkdtemp(path.join(os.tmpdir(), "gdevelop-native-authoring-"));
@@ -43,13 +43,24 @@ test(
       kind: "image",
     });
     await runtime.addSceneLayer(project, { sceneName: "Game", layerName: "HUD" });
-    await runtime.setSceneVariable(project, { sceneName: "Game", name: "Score", value: 0 });
+    await runtime.setGlobalVariable(project, {
+      name: "MetaProgress",
+      value: { Echoes: 12, Unlocks: ["Fang", "Rift"] },
+    });
+    await runtime.setSceneVariable(project, {
+      sceneName: "Game",
+      name: "Run",
+      value: { Risk: 0, Rooms: [1, 3, 2] },
+    });
     await runtime.addSceneObject(project, {
       sceneName: "Game",
       name: "Player",
       type: "Sprite",
       resourceName: "player.svg",
-      variables: { Health: 100 },
+      variables: {
+        Health: 100,
+        Build: { Weapon: "Claws", Runes: ["Frost", "Chain"] },
+      },
       behaviors: [
         {
           name: "Platformer",
@@ -78,6 +89,7 @@ test(
       y: 100,
       width: 64,
       height: 64,
+      variables: { Spawn: { Room: 1, Elite: true } },
     });
     await runtime.addObjectInstance(project, {
       sceneName: "Game",
@@ -86,15 +98,28 @@ test(
       y: 24,
       layer: "HUD",
     });
+    await runtime.addObjectGroup(project, {
+      sceneName: "Game",
+      name: "Actors",
+      objectNames: ["Player"],
+    });
     await runtime.setSceneEvents(project, {
       sceneName: "Game",
       events: [
-        { kind: "comment", text: "Native event sheet authored through MCP" },
         {
-          kind: "standard",
-          conditions: [{ type: "BuiltinCommonInstructions::Once", parameters: [] }],
-          actions: [{ type: "ModVarScene", parameters: ["Score", "=", "1"] }],
-          subEvents: [],
+          kind: "group",
+          name: "Run bootstrap",
+          folded: true,
+          color: { r: 42, g: 32, b: 86 },
+          events: [
+            { kind: "comment", text: "Native event sheet authored through MCP" },
+            {
+              kind: "standard",
+              conditions: [{ type: "BuiltinCommonInstructions::Once", parameters: [] }],
+              actions: [{ type: "ModVarScene", parameters: ["Run.Risk", "=", "1"] }],
+              subEvents: [],
+            },
+          ],
         },
       ],
     });
@@ -103,7 +128,9 @@ test(
     const serialized = JSON.parse(await fs.readFile(projectFile, "utf8"));
     assert.equal(serialized.layouts[0].objects.find((object) => object.name === "Player").type, "Sprite");
     assert.equal(serialized.layouts[0].instances.length, 2);
-    assert.equal(serialized.layouts[0].events.length, 2);
+    assert.equal(serialized.layouts[0].events.length, 1);
+    assert.equal(serialized.layouts[0].events[0].type, "BuiltinCommonInstructions::Group");
+    assert.equal(serialized.layouts[0].events[0].events.length, 2);
     const hud = serialized.layouts[0].objects.find((object) => object.name === "Hud");
     assert.equal(hud.bold, true);
     assert.equal(hud.textAlignment, "center");
@@ -113,10 +140,31 @@ test(
     assert.ok(serialized.layouts[0].events.every((event) => event.type !== "BuiltinCommonInstructions::JsCode"));
 
     ({ project: reopened } = await runtime.openProject(projectFile));
+    assert.equal(reopened.getVariables().get("MetaProgress").getChild("Echoes").getValue(), 12);
+    assert.equal(
+      reopened.getLayout("Game").getVariables().get("Run").getChild("Rooms").getAtIndex(1).getValue(),
+      3,
+    );
+    const playerObject = reopened.getLayout("Game").getObjects().getObject("Player");
+    assert.equal(
+      playerObject.getVariables().get("Build").getChild("Weapon").getString(),
+      "Claws",
+    );
+    const spawnVariable = serialized.layouts[0].instances[0].initialVariables.find(
+      (variable) => variable.name === "Spawn",
+    );
+    assert.equal(
+      spawnVariable.children.find((variable) => variable.name === "Elite").value,
+      true,
+    );
     const description = runtime.describeNativeProject(reopened);
-    assert.equal(description.scenes[0].events, 2);
+    assert.equal(description.globalVariables, 1);
+    assert.equal(description.scenes[0].events, 1);
     assert.equal(description.scenes[0].instances, 2);
     assert.equal(description.scenes[0].objects.length, 2);
+    assert.deepEqual(description.scenes[0].objectGroups, [
+      { name: "Actors", objects: ["Player"] },
+    ]);
     await runtime.buildPreview(reopened, previewDirectory, { sceneName: "Game" });
     assert.match(
       await fs.readFile(path.join(previewDirectory, "code0.js"), "utf8"),

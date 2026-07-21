@@ -72,6 +72,16 @@ export class ProjectSessionManager {
     return { projectId, ...(await this.runtime.setSceneVariable(record.project, input)) };
   }
 
+  async setGlobalVariable(projectId, input) {
+    const record = this.get(projectId);
+    return { projectId, ...(await this.runtime.setGlobalVariable(record.project, input)) };
+  }
+
+  async addObjectGroup(projectId, input) {
+    const record = this.get(projectId);
+    return { projectId, ...(await this.runtime.addObjectGroup(record.project, input)) };
+  }
+
   async addSceneObject(projectId, input) {
     const record = this.get(projectId);
     return { projectId, ...(await this.runtime.addSceneObject(record.project, input)) };

@@ -18,12 +18,17 @@ property of their respective owner.
 - `import_resource` registers a local image, 3D model, audio, video, font,
   JSON, Spine atlas/skeleton, or JavaScript file, with optional embedded-resource metadata.
 - `add_scene_layer` creates an editor-visible scene layer.
-- `set_scene_variable` creates or updates an editor-visible scene variable.
+- `set_global_variable` and `set_scene_variable` create primitive or structured
+  editor-visible variables, including arrays used for data-driven content.
 - `add_scene_object` creates a native Sprite/Text/Spine object with variables,
   behaviors, collision masks, styled text outlines/shadows, and Spine animation mappings.
-- `add_object_instance` places an editor-visible initial scene instance.
-- `set_scene_events` authors standard conditions/actions and nested events without JavaScript.
-- `describe_native_project` reports the native objects, behaviors, instances, variables, and events.
+- `add_object_group` creates reusable editor-visible object groups.
+- `add_object_instance` places an editor-visible initial scene instance with
+  optional structured instance variables.
+- `set_scene_events` authors comments, collapsible groups, standard
+  conditions/actions, and nested events without JavaScript.
+- `describe_native_project` reports global variables, native objects, object
+  groups, behaviors, instances, scene variables, and events.
 - `export_project` writes a persistent GDJS web build to a chosen directory.
 - `set_scene_javascript` adds or replaces an MCP-managed scene JavaScript event.
 - `save_project` serializes the in-memory project back to disk.
@@ -95,7 +100,8 @@ intended loop is:
 
 For a new project, Codex can instead call `create_project`, apply one or more
 `update_project`, `import_resource`, `add_scene_object`, `add_object_instance`,
-`set_scene_variable`, and `set_scene_events` operations, then call `save_project`
+`set_global_variable`, `set_scene_variable`, `add_object_group`, and
+`set_scene_events` operations, then call `save_project`
 and `build_preview`. This native path produces editor-visible objects, behaviors,
 variables, conditions, and actions. `set_scene_javascript` remains available for
 small engine integrations, but is not required for ordinary gameplay. Project
