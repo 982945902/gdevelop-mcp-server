@@ -328,12 +328,29 @@ export class GDevelopRuntime {
       project.setName(options.name || path.basename(absoluteProjectFile, path.extname(absoluteProjectFile)));
       project.setDescription(options.description || "");
       project.setGameResolutionSize(options.width || 1280, options.height || 720);
-      project.setAdaptGameResolutionAtRuntime(true);
+      project.setAdaptGameResolutionAtRuntime(options.adaptGameResolutionAtRuntime ?? true);
+      if (options.sizeOnStartupMode !== undefined) {
+        project.setSizeOnStartupMode(options.sizeOnStartupMode);
+      }
       project.setMaximumFPS(options.maximumFps || 60);
       project.setMinimumFPS(options.minimumFps || 20);
       project.setPlayableWithKeyboard(true);
       project.setPlayableWithMobile(true);
       project.setProjectFile(absoluteProjectFile);
+
+      const loadingScreen = project.getLoadingScreen();
+      if (options.loadingBackgroundResourceName !== undefined) {
+        loadingScreen.setBackgroundImageResourceName(options.loadingBackgroundResourceName);
+      }
+      if (options.loadingBackgroundColor !== undefined) {
+        loadingScreen.setBackgroundColor(options.loadingBackgroundColor);
+      }
+      if (options.loadingMinDuration !== undefined) {
+        loadingScreen.setMinDuration(options.loadingMinDuration);
+      }
+      if (options.showGDevelopSplash !== undefined) {
+        loadingScreen.showGDevelopLogoDuringLoadingScreen(options.showGDevelopSplash);
+      }
 
       const layout = project.insertNewLayout(sceneName, 0);
       project.setFirstLayout(sceneName);
